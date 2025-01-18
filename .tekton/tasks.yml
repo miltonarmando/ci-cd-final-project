@@ -10,3 +10,18 @@ spec:
         #!/bin/sh
         echo "Cleaning up resources"
         rm -rf temp_files/
+
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: nose-test
+spec:
+  steps:
+    - name: run-nose-tests
+      image: python:3.8
+      script: |
+        #!/bin/sh
+        pip install -r requirements.txt
+        pip install nose
+        nosetests tests/
