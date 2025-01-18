@@ -1,35 +1,85 @@
-from flask import Flask, render_template  # Importa as funções Flask e render_template do Flask
-from service.routes import routes_blueprint  # Importa o blueprint de rotas para modularizar o código
-from models import Product, db  # Importa o modelo Product e o objeto db configurados para interagir com o banco de dados
+from flask import Flask, jsonify, request, render_template
+from flask_sqlalchemy import SQLAlchemy
 
-# Criação da instância do Flask
+# Inicializa o aplicativo Flask
 app = Flask(__name__)
 
-# Configurações do Flask para o ambiente de teste e banco de dados
-app.config['TESTING'] = True  # Habilita o modo de testes
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///products.db"  # Configura a URI para o banco de dados SQLite
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False  # Desabilita o rastreamento de modificações no banco de dados (para evitar warnings)
+# Configuração do banco de dados SQLite
+app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///test.db"
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-# Inicializa o banco de dados com a configuração do app
-db.init_app(app)
+# Inicializa a extensão SQLAlchemy
+db = SQLAlchemy(app)
 
-# Registra o blueprint de rotas para modularizar o código
-app.register_blueprint(routes_blueprint)
+# Modelo de dados para representar produtos
+class Product(db.Model):
+    id = db.Column(db.Integer, primary_key=True)  # Identificador único
+    name = db.Column(db.String(80), nullable=False)  # Nome do produto
+    category = db.Column(db.String(80), nullable=False)  # Categoria do produto
+    price = db.Column(db.Float, nullable=False)  # Preço do produto
+    availability = db.Column(db.Boolean)
 
-# Rota principal da aplicação, renderiza a página inicial
-@app.route('/')
-def index():
-    return render_template('index.html')  # Renderiza o template 'index.html'
+    def serialize(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "category": self.category,
+            "price": self.price,
+            "availability": self.availability,
+        }
 
-# Rota para listar todos os produtos
-@app.route('/products')
-def products():
-    # Busca todos os produtos do banco de dados usando a consulta do SQLAlchemy
-    products = Product.query.all()
-    return render_template('products.html', products=products)  # Passa os produtos para o template 'products.html'
+# Garante que as tabelas sejam criadas antes de rodar o app
+with app.app_context():
+    db.create_all()
 
-# Verifica se o script está sendo executado diretamente e, em caso afirmativo, inicia o app
+@app.route("/products/<int:product_id>", methods=["GET"])
+def read_product(product_id):
+    product = Product.query.get_or_404(product_id)
+    return jsonify(product.serialize())
+
+@app.route("/products/<int:product_id>", methods=["PUT"])
+def update_product(product_id):
+    product = Product.query.get_or_404(product_id)
+    data = request.json
+    product.name = data.get("name", product.name)
+    product.category = data.get("category", product.category)
+    product.price = data.get("price", product.price)
+    product.availability = data.get("availability", product.availability)
+    db.session.commit()
+    return jsonify(product.serialize())
+
+@app.route("/products/<int:product_id>", methods=["DELETE"])
+def delete_product(product_id):
+    product = Product.query.get_or_404(product_id)
+    db.session.delete(product)
+    db.session.commit()
+    return "", 204
+
+@app.route("/products", methods=["GET"])
+def list_products():
+    filters = {}
+    if "name" in request.args:
+        filters["name"] = request.args["name"]
+    if "category" in request.args:
+        filters["category"] = request.args["category"]
+    if "availability" in request.args:
+        filters["availability"] = request.args.get("availability") == "true"
+    products = Product.query.filter_by(**filters).all()
+    return jsonify([product.serialize() for product in products])
+
+@app.route("/products", methods=["POST"])
+def create_product():
+    data = request.json
+    new_product = Product(
+        name=data["name"],
+        category=data["category"],
+        price=data["price"],
+        availability=data["availability"]
+    )
+    db.session.add(new_product)
+    db.session.commit()
+    return jsonify(new_product.serialize()), 201
+
 if __name__ == "__main__":
-    with app.app_context():  # Cria o contexto da aplicação para garantir que o banco de dados e as tabelas sejam criados
-        db.create_all()  # Cria todas as tabelas no banco de dados
-    app.run(debug=True)  # Inicia o servidor Flask no modo de depuração
+    app.run(debug=True)
+
