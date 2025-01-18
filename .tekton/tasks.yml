@@ -1,0 +1,12 @@
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: cleanup
+spec:
+  steps:
+    - name: cleanup-step
+      image: busybox
+      script: |
+        #!/bin/sh
+        echo "Cleaning up resources"
+        rm -rf temp_files/
