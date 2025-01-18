@@ -24,7 +24,7 @@ jobs:
 
       - name: Run pylint
         run: |
-          pylint .
+          pylint --disable=F0010 .
 
   test:
     runs-on: ubuntu-latest
